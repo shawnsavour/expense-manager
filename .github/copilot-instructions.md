@@ -119,49 +119,53 @@ Every incoming request **must** provide the raw `initData` string from `window.T
 ```javascript
 // utils/verifyTelegram.gs
 
-const BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('BOT_TOKEN');
-
 /**
  * Verifies Telegram WebApp initData HMAC.
  * Returns the parsed user object on success, throws on failure.
+ *
+ * NOTE: URLSearchParams is NOT available in Apps Script — parse manually.
  */
 function verifyInitData(rawInitData) {
-  const params = new URLSearchParams(rawInitData);
+  // Manual query-string parse
+  const params = {};
+  rawInitData.split('&').forEach(function(pair) {
+    const idx = pair.indexOf('=');
+    if (idx === -1) return;
+    const key = decodeURIComponent(pair.slice(0, idx).replace(/\+/g, ' '));
+    const val = decodeURIComponent(pair.slice(idx + 1).replace(/\+/g, ' '));
+    params[key] = val;
+  });
 
-  const receivedHash = params.get('hash');
+  const receivedHash = params['hash'];
   if (!receivedHash) throw new Error('Missing hash in initData');
 
   // Build the check string: all fields except hash, sorted, joined by \n
-  const checkArr = [];
-  params.forEach((value, key) => {
-    if (key !== 'hash') checkArr.push(`${key}=${value}`);
-  });
-  checkArr.sort();
-  const checkString = checkArr.join('\n');
+  const checkString = Object.keys(params)
+    .filter(function(k) { return k !== 'hash'; })
+    .sort()
+    .map(function(k) { return k + '=' + params[k]; })
+    .join('\n');
+
+  const BOT_TOKEN = PropertiesService.getScriptProperties().getProperty('BOT_TOKEN');
 
   // secret_key = HMAC-SHA256("WebAppData", botToken)
   const secretKey = Utilities.computeHmacSha256Signature(
-    'WebAppData',
-    BOT_TOKEN,
-    Utilities.Charset.UTF_8
+    'WebAppData', BOT_TOKEN, Utilities.Charset.UTF_8
   );
 
   // expected_hash = HMAC-SHA256(checkString, secretKey)
-  const expectedHashBytes = Utilities.computeHmacSha256Signature(
-    checkString,
-    secretKey
-  );
+  const expectedHashBytes = Utilities.computeHmacSha256Signature(checkString, secretKey);
   const expectedHash = expectedHashBytes
-    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2))
+    .map(function(b) { return ('0' + (b & 0xff).toString(16)).slice(-2); })
     .join('');
 
   if (expectedHash !== receivedHash) throw new Error('initData verification failed');
 
-  // Optionally reject stale data (> 1 hour)
-  const authDate = parseInt(params.get('auth_date'), 10);
+  // Reject stale data (> 1 hour)
+  const authDate = parseInt(params['auth_date'], 10);
   if (Date.now() / 1000 - authDate > 3600) throw new Error('initData expired');
 
-  return JSON.parse(params.get('user'));
+  return JSON.parse(params['user']);
 }
 ```
 
