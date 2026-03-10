@@ -13,13 +13,14 @@ export async function appsScriptCall<T>(
     throw new Error('NEXT_PUBLIC_APPS_SCRIPT_URL is not configured.')
   }
 
-  // Use text/plain to avoid CORS preflight — Apps Script cannot respond to OPTIONS.
-  // The JSON string in the body is still parsed normally by JSON.parse(e.postData.contents).
-  const res = await fetch(BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, initData, ...body }),
-  })
+  // Apps Script /exec issues a cross-origin 302 redirect. Browsers drop the POST body
+  // when following cross-origin redirects, so the script receives nothing.
+  // Workaround: encode everything as a single `payload` query parameter on a GET request.
+  // GET redirects preserve query parameters, so the body survives the redirect.
+  const url = new URL(BASE_URL)
+  url.searchParams.set('payload', JSON.stringify({ action, initData, ...body }))
+
+  const res = await fetch(url.toString(), { method: 'GET' })
 
   if (!res.ok) {
     throw new Error(`HTTP ${res.status} ${res.statusText}`)

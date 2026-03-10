@@ -185,9 +185,18 @@ function handleRequest_(e) {
   output.setMimeType(ContentService.MimeType.JSON);
 
   try {
-    const body   = e.postData ? JSON.parse(e.postData.contents) : {};
-    const params = e.parameter || {};
-    const action = body.action || params.action;
+    // Supports two calling conventions:
+    // 1. GET ?payload=<JSON string>  — used by the frontend to survive Apps Script's 302 redirect
+    // 2. POST with JSON body          — usable from server-side callers / curl
+    let body = {};
+    if (e.parameter && e.parameter.payload) {
+      body = JSON.parse(e.parameter.payload);
+    } else if (e.postData && e.postData.contents) {
+      body = JSON.parse(e.postData.contents);
+    }
+
+    const params   = e.parameter || {};
+    const action   = body.action   || params.action;
     const initData = body.initData || params.initData;
 
     const user = verifyInitData(initData); // throws if invalid
