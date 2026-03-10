@@ -4,6 +4,11 @@ export function getBaseUrl() {
   return BASE_URL
 }
 
+/** False when NEXT_PUBLIC_APPSCRIPT_ENABLED is explicitly set to "false". */
+export function isAppScriptEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_APPSCRIPT_ENABLED !== 'false'
+}
+
 export async function appsScriptCall<T>(
   action: string,
   body: Record<string, unknown> = {},

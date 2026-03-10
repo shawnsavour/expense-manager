@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useTelegramUser } from '@/hooks/useTelegramUser'
-import { appsScriptCall } from '@/lib/api'
+import { appsScriptCall, getBaseUrl, isAppScriptEnabled } from '@/lib/api'
+import { getMembersFromSheet, getExpensesFromSheet, computeBalances } from '@/lib/sheetsApi'
 import BalanceTable from '@/components/BalanceTable'
 import AddExpenseSheet from '@/components/AddExpenseSheet'
 import SettlementSheet from '@/components/SettlementSheet'
-import { getBaseUrl } from '@/lib/api'
 import type { BalanceTransfer, Member } from '@/types'
 
 export default function Home() {
@@ -21,16 +21,26 @@ export default function Home() {
   const [settlementTarget, setSettlementTarget] = useState<BalanceTransfer | null>(null)
 
   const loadData = useCallback(async () => {
-    if (!initData) return
     setLoading(true)
     setError(null)
     try {
-      const [bal, mem] = await Promise.all([
-        appsScriptCall<BalanceTransfer[]>('getBalances', {}, initData),
-        appsScriptCall<Member[]>('getMembers', {}, initData),
-      ])
-      setBalances(bal)
-      setMembers(mem)
+      if (isAppScriptEnabled()) {
+        if (!initData) return
+        const [bal, mem] = await Promise.all([
+          appsScriptCall<BalanceTransfer[]>('getBalances', {}, initData),
+          appsScriptCall<Member[]>('getMembers', {}, initData),
+        ])
+        setBalances(bal)
+        setMembers(mem)
+      } else {
+        // Read directly from the public Google Sheet — no initData needed
+        const [expenses, mem] = await Promise.all([
+          getExpensesFromSheet(),
+          getMembersFromSheet(),
+        ])
+        setMembers(mem)
+        setBalances(computeBalances(expenses))
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load data.')
     } finally {
@@ -41,6 +51,11 @@ export default function Home() {
   // Wait until the Telegram WebApp hook has run before doing anything
   useEffect(() => {
     if (!ready) return
+    if (!isAppScriptEnabled()) {
+      // Reads go directly to the public sheet — load immediately
+      loadData()
+      return
+    }
     if (!initData) {
       // Running outside Telegram (e.g. npm run dev in browser)
       setLoading(false)
@@ -139,8 +154,8 @@ export default function Home() {
         />
       )}
 
-      {/* Floating + button */}
-      <button
+      {/* Floating + button — only shown when writes are available via Apps Script */}
+      {isAppScriptEnabled() && <button
         onClick={() => setShowAddExpense(true)}
         className="fixed bottom-6 right-5 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-3xl font-light transition-transform active:scale-90"
         style={{
@@ -150,10 +165,10 @@ export default function Home() {
         aria-label="Add expense"
       >
         +
-      </button>
+      </button>}
 
       {/* Add Expense bottom sheet */}
-      {showAddExpense && (
+      {isAppScriptEnabled() && showAddExpense && (
         <AddExpenseSheet
           members={members}
           initData={initData}

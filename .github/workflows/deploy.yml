@@ -26,6 +26,8 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+          NEXT_PUBLIC_SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          NEXT_PUBLIC_APPSCRIPT_ENABLED: ${{ vars.APPSCRIPT_ENABLED }}
           # Set to /<repo-name> so assets resolve correctly on GitHub Pages
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
 

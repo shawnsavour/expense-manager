@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import BottomSheet from './BottomSheet'
-import { appsScriptCall } from '@/lib/api'
+import { appsScriptCall, isAppScriptEnabled } from '@/lib/api'
+import { getBanksFromSheet, getExpensesFromSheet } from '@/lib/sheetsApi'
 import type { BalanceTransfer, Bank, Expense, Member } from '@/types'
 
 interface Props {
@@ -21,20 +22,26 @@ export default function SettlementSheet({ transfer, members, initData, onClose, 
 
   const fromName = members.find((m) => m.id === transfer.from)?.name ?? transfer.from
   const toName = members.find((m) => m.id === transfer.to)?.name ?? transfer.to
+  const writesEnabled = isAppScriptEnabled()
 
   useEffect(() => {
-    appsScriptCall<Bank[]>('getBanks', { memberId: transfer.to }, initData)
+    const load = writesEnabled
+      ? appsScriptCall<Bank[]>('getBanks', { memberId: transfer.to }, initData)
+      : getBanksFromSheet(transfer.to)
+
+    load
       .then(setBanks)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [transfer.to, initData])
+  }, [transfer.to, initData, writesEnabled])
 
   const handleMarkPaid = async () => {
     setMarking(true)
     setError('')
     try {
-      // Fetch all expenses, find unpaid ones where transfer.to paid for transfer.from
-      const expenses = await appsScriptCall<Expense[]>('getExpenses', {}, initData)
+      const expenses: Expense[] = writesEnabled
+        ? await appsScriptCall<Expense[]>('getExpenses', {}, initData)
+        : await getExpensesFromSheet()
 
       const unpaidRelated = expenses.filter((e) => {
         if (e.paid === true || e.paid === 'TRUE') return false
@@ -134,17 +141,23 @@ export default function SettlementSheet({ transfer, members, initData, onClose, 
           <p className="text-sm font-medium text-red-500">{error}</p>
         )}
 
-        <button
-          onClick={handleMarkPaid}
-          disabled={marking}
-          className="w-full py-4 rounded-xl font-semibold text-base transition-opacity disabled:opacity-50 active:opacity-80"
-          style={{
-            background: 'var(--tg-theme-button-color)',
-            color: 'var(--tg-theme-button-text-color)',
-          }}
-        >
-          {marking ? 'Marking…' : '✓ Mark as Paid'}
-        </button>
+        {writesEnabled ? (
+          <button
+            onClick={handleMarkPaid}
+            disabled={marking}
+            className="w-full py-4 rounded-xl font-semibold text-base transition-opacity disabled:opacity-50 active:opacity-80"
+            style={{
+              background: 'var(--tg-theme-button-color)',
+              color: 'var(--tg-theme-button-text-color)',
+            }}
+          >
+            {marking ? 'Marking…' : '✓ Mark as Paid'}
+          </button>
+        ) : (
+          <p className="text-xs text-center pb-2" style={{ color: 'var(--tg-theme-hint-color)' }}>
+            Mark as paid is unavailable while Apps Script is disabled.
+          </p>
+        )}
       </div>
     </BottomSheet>
   )
