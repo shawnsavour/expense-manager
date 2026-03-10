@@ -6,6 +6,7 @@ import { appsScriptCall } from '@/lib/api'
 import BalanceTable from '@/components/BalanceTable'
 import AddExpenseSheet from '@/components/AddExpenseSheet'
 import SettlementSheet from '@/components/SettlementSheet'
+import { getBaseUrl } from '@/lib/api'
 import type { BalanceTransfer, Member } from '@/types'
 
 export default function Home() {
@@ -113,7 +114,11 @@ export default function Home() {
             className="rounded-2xl p-4 text-sm flex flex-col gap-3"
             style={{ background: 'var(--tg-theme-secondary-bg-color)' }}
           >
-            <p style={{ color: 'var(--tg-theme-text-color)' }}>{error}</p>
+            <p className="font-semibold" style={{ color: 'var(--tg-theme-text-color)' }}>Load failed</p>
+            <p className="font-mono text-xs break-all" style={{ color: '#ef4444' }}>{error}</p>
+            <p className="text-xs break-all" style={{ color: 'var(--tg-theme-hint-color)' }}>
+              URL: {getBaseUrl() ?? '(not set)'}
+            </p>
             <button
               onClick={loadData}
               className="self-start text-sm font-semibold"
